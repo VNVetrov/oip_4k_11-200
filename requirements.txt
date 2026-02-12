@@ -4,3 +4,7 @@ aiohttp
 aiofiles
 certifi
 pymystem3
+fastapi
+uvicorn
+jinja2
+python-multipart

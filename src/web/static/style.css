@@ -1,0 +1,127 @@
+/* static/style.css */
+
+:root {
+    --primary-color: #4285f4;
+    --bg-color: #f8f9fa;
+}
+
+body {
+    background-color: var(--bg-color);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+}
+
+.search-logo {
+    font-size: 2.5rem;
+    font-weight: 300;
+    color: var(--primary-color);
+}
+
+.search-logo i {
+    font-size: 2rem;
+}
+
+.search-input {
+    border-radius: 24px 0 0 24px !important;
+    border: 2px solid #dfe1e5;
+    padding: 12px 20px;
+    font-size: 1.1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(66, 133, 244, 0.15);
+}
+
+.search-btn {
+    border-radius: 0 24px 24px 0 !important;
+    padding: 12px 24px;
+    font-size: 1.1rem;
+}
+
+.suggestion {
+    color: var(--primary-color);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.suggestion:hover {
+    text-decoration: underline;
+}
+
+.result-card {
+    border: none;
+    border-radius: 12px;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.result-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}
+
+.result-title {
+    color: #1a0dab;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.result-title:hover {
+    text-decoration: underline;
+}
+
+.result-url a {
+    color: #188038 !important;
+    font-size: 0.85rem;
+}
+
+.result-snippet {
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.score-badge {
+    font-size: 0.75rem;
+    font-weight: 400;
+    padding: 4px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+/* ─── HTMX спиннер ─── */
+#spinner {
+    display: none;
+}
+
+.htmx-request #spinner,
+.htmx-request.htmx-indicator,
+#spinner.htmx-request {
+    display: block !important;
+}
+
+/* Затемняем результаты во время загрузки */
+#search-form.htmx-request ~ #results {
+    opacity: 0.4;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+@media (max-width: 576px) {
+    .search-logo {
+        font-size: 1.8rem;
+    }
+
+    .search-input {
+        font-size: 1rem;
+        padding: 10px 16px;
+    }
+
+    .search-btn {
+        padding: 10px 16px;
+    }
+
+    .score-badge {
+        display: none;
+    }
+}

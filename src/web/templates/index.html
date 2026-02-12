@@ -1,0 +1,89 @@
+<!-- templates/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Поисковая система{% endblock %}
+
+{% block body %}
+<div class="search-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+
+                <!-- Логотип -->
+                <div class="text-center mt-5 mb-4">
+                    <h1 class="search-logo">
+                        <i class="bi bi-search"></i> Поиск
+                    </h1>
+                    <p class="text-muted">
+                        Векторный поиск по {{ stats.num_docs }} документам
+                        · {{ stats.num_terms }} термов
+                    </p>
+                </div>
+
+                <!-- Форма поиска -->
+                <form id="search-form"
+                      hx-get="/search"
+                      hx-target="#results"
+                      hx-trigger="submit"
+                      hx-indicator="#spinner">
+
+                    <div class="input-group input-group-lg shadow-sm">
+                        <input type="text"
+                               name="q"
+                               class="form-control search-input"
+                               placeholder="Введите поисковый запрос..."
+                               value="{{ query or '' }}"
+                               autocomplete="off"
+                               autofocus>
+
+                        <input type="hidden" name="top_k" value="20">
+
+                        <button class="btn btn-primary search-btn" type="submit">
+                            <i class="bi bi-search"></i>
+                            <span class="d-none d-sm-inline ms-1">Найти</span>
+                        </button>
+                    </div>
+
+                    <div class="mt-2 text-center">
+                        <small class="text-muted">
+                            Попробуйте:
+                            <a href="#" class="suggestion" onclick="fillQuery(this)">Москва</a> ·
+                            <a href="#" class="suggestion" onclick="fillQuery(this)">история России</a> ·
+                            <a href="#" class="suggestion" onclick="fillQuery(this)">наука и техника</a>
+                        </small>
+                    </div>
+                </form>
+
+                <!-- Спиннер — отдельно от формы -->
+                <div id="spinner" class="text-center my-4" style="display:none;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="text-muted mt-2">Ищем...</p>
+                </div>
+
+                <!-- Результаты -->
+                <div id="results">
+                    {% if results is defined and results %}
+                        {% include "results.html" %}
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center mt-5 mb-3">
+        <small class="text-muted">
+            TF-IDF + Cosine Similarity · FastAPI + HTMX + Bootstrap
+        </small>
+    </footer>
+</div>
+
+<script>
+function fillQuery(el) {
+    event.preventDefault();
+    const input = document.querySelector('.search-input');
+    input.value = el.textContent;
+    htmx.trigger('#search-form', 'submit');
+}
+</script>
+{% endblock %}
