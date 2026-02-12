@@ -50,3 +50,13 @@
 ---
 
 ## Задание 4.
+
+### Запуск расчёта tf-idf
+
+- `python3 src/tf-idf-builder/builder.py`
+
+Выходные файлы: `tfidf_lemmas/*`, `tfidf_tokens/*`
+
+---
+
+## Задание 5.
