@@ -3,3 +3,4 @@ beautifulsoup4
 aiohttp
 aiofiles
 certifi
+pymystem3
