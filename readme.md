@@ -31,7 +31,7 @@
 
 - `python3 src/tokenizer/tokenizer.py`
 
-Выходные файлы: `lemmas.txt`, `tokens.txt`
+Выходные файлы: `lemmas.txt`, `tokens.txt`, `lemmas/*`, `token/*`
 
 ---
 
