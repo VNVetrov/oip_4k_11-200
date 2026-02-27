@@ -1,39 +1,28 @@
+# tokenizer.py
+
 import os
 import re
 from bs4 import BeautifulSoup
 from pymystem3 import Mystem
 from collections import defaultdict
 
-
-# Русские стоп-слова (предлоги, союзы, частицы, местоимения и т.д.)
 STOP_WORDS = {
-    # Предлоги
     'в', 'на', 'по', 'с', 'со', 'к', 'ко', 'у', 'о', 'об', 'обо', 'от', 'ото',
     'из', 'изо', 'за', 'до', 'для', 'без', 'безо', 'при', 'про', 'через', 'между',
-    'над', 'надо', 'под', 'подо', 'перед', 'передо', 'пред', 'предо', 'около',
-    'вокруг', 'после', 'среди', 'вместо', 'кроме', 'помимо', 'сквозь', 'вдоль',
-    'поперёк', 'поперек', 'ради', 'навстречу', 'вопреки', 'согласно', 'благодаря',
-    'вследствие', 'насчёт', 'насчет', 'ввиду', 'наподобие', 'вроде', 'посредством',
-    'путём', 'путем',
-
-    # Союзы
+    'над', 'надо', 'под', 'подо', 'перед', 'передо', 'около', 'вокруг', 'после',
+    'среди', 'вместо', 'кроме', 'помимо', 'сквозь', 'вдоль', 'ради', 'благодаря',
+    'вследствие', 'насчёт', 'насчет', 'ввиду', 'посредством',
     'и', 'а', 'но', 'да', 'или', 'либо', 'ни', 'то', 'не', 'ли', 'бы',
     'что', 'чтобы', 'чтоб', 'как', 'так', 'если', 'когда', 'пока', 'хотя',
     'хоть', 'будто', 'словно', 'точно', 'раз', 'ведь', 'потому', 'поэтому',
     'причём', 'причем', 'притом', 'зато', 'однако', 'также', 'тоже', 'же',
     'только', 'лишь', 'даже', 'именно', 'ибо',
-
-    # Частицы
     'вот', 'вон', 'вовсе', 'разве', 'неужели', 'ну', 'уж',
-    'ведь', 'мол', 'дескать', 'якобы', 'аж', 'всё', 'все',
-
-    # Местоимения
     'я', 'мы', 'ты', 'вы', 'он', 'она', 'оно', 'они',
     'мой', 'моя', 'моё', 'мое', 'мои', 'наш', 'наша', 'наше', 'наши',
     'твой', 'твоя', 'твоё', 'твое', 'твои', 'ваш', 'ваша', 'ваше', 'ваши',
-    'его', 'её', 'ее', 'их',
-    'себя', 'себе', 'собой', 'собою',
-    'кто', 'что', 'какой', 'какая', 'какое', 'какие', 'чей', 'чья', 'чьё', 'чье', 'чьи',
+    'его', 'её', 'ее', 'их', 'себя', 'себе', 'собой', 'собою',
+    'кто', 'какой', 'какая', 'какое', 'какие', 'чей', 'чья', 'чьё', 'чье', 'чьи',
     'который', 'которая', 'которое', 'которые', 'которого', 'которой', 'которых',
     'этот', 'эта', 'это', 'эти', 'тот', 'та', 'те',
     'сам', 'сама', 'само', 'сами', 'самый', 'самая', 'самое', 'самые',
@@ -42,228 +31,263 @@ STOP_WORDS = {
     'меня', 'мне', 'мной', 'мною', 'нас', 'нам', 'нами',
     'тебя', 'тебе', 'тобой', 'тобою', 'вас', 'вам', 'вами',
     'него', 'нему', 'ним', 'нём', 'нем', 'неё', 'нее', 'ней', 'нею',
-    'них', 'ними',
-    'ему', 'им', 'ей', 'ею',
-
-    # Вспомогательные глаголы / связки
+    'них', 'ними', 'ему', 'им', 'ей', 'ею',
     'быть', 'был', 'была', 'было', 'были', 'есть', 'будет', 'будут',
     'будем', 'будете', 'буду', 'будешь',
-
-    # Наречия-связки
     'уже', 'ещё', 'еще', 'очень', 'более', 'менее', 'тут', 'там', 'здесь',
     'где', 'куда', 'откуда', 'тогда', 'потом', 'затем', 'сейчас', 'теперь',
     'можно', 'нужно', 'надо', 'нельзя',
 }
 
-# Минимальная длина токена
 MIN_TOKEN_LENGTH = 2
 
 
-def extract_text_from_html(html_content: str) -> str:
-    """Извлекает текстовое содержимое из HTML"""
-    soup = BeautifulSoup(html_content, 'html.parser')
+class Tokenizer:
+    def __init__(self, pages_dir='pages',
+                 output_tokens_dir='tokens',
+                 output_lemmas_dir='lemmas'):
+        self.pages_dir = pages_dir
+        self.output_tokens_dir = output_tokens_dir
+        self.output_lemmas_dir = output_lemmas_dir
+        self.mystem = Mystem()
 
-    # Удаляем скрипты и стили
-    for tag in soup.find_all(['script', 'style', 'noscript', 'header', 'footer', 'nav']):
-        tag.decompose()
+        # Глобальные множества для общих файлов
+        self.all_tokens = set()
+        self.all_lemma_groups = defaultdict(set)  # лемма -> set(токенов)
 
-    text = soup.get_text(separator=' ', strip=True)
-    return text
+        os.makedirs(output_tokens_dir, exist_ok=True)
+        os.makedirs(output_lemmas_dir, exist_ok=True)
 
+    def _safe_analyze(self, text: str) -> list:
+        """Безопасный вызов mystem"""
+        for attempt in range(2):
+            try:
+                clean = text.encode('utf-8', errors='replace').decode('utf-8')
+                return self.mystem.analyze(clean)
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                self.mystem = Mystem()
+            except BrokenPipeError:
+                self.mystem = Mystem()
+            except Exception:
+                break
+        return []
 
-def is_valid_token(token: str) -> bool:
-    """Проверяет, является ли токен допустимым"""
-    # Только кириллические буквы
-    if not re.match(r'^[а-яёА-ЯЁ]+$', token):
-        return False
+    def _extract_text(self, html_content: str) -> str:
+        """Извлекает текст из HTML"""
+        soup = BeautifulSoup(html_content, 'html.parser')
+        for tag in soup.find_all(['script', 'style', 'noscript', 'header', 'footer', 'nav']):
+            tag.decompose()
+        return soup.get_text(separator=' ', strip=True)
 
-    # Минимальная длина
-    if len(token) < MIN_TOKEN_LENGTH:
-        return False
+    def _is_valid_token(self, token: str) -> bool:
+        """Проверяет валидность токена"""
+        if not re.match(r'^[а-яё]+$', token):
+            return False
+        if len(token) < MIN_TOKEN_LENGTH:
+            return False
+        if token in STOP_WORDS:
+            return False
+        return True
 
-    # Не стоп-слово
-    if token.lower() in STOP_WORDS:
-        return False
+    def _process_document(self, doc_id: int, filepath: str):
+        """
+        Обрабатывает один документ:
+        1. Извлекает текст
+        2. Токенизирует
+        3. Лемматизирует
+        4. Сохраняет файл токенов и файл лемм
+        """
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+        except Exception as e:
+            print(f"\n  Ошибка чтения {filepath}: {e}")
+            return
 
-    return True
+        text = self._extract_text(html_content)
 
+        raw_words = re.findall(r'[а-яёА-ЯЁ]+', text.lower())
+        valid_tokens = set(w for w in raw_words if self._is_valid_token(w))
 
-def tokenize_file(filepath: str) -> set:
-    """Токенизирует один HTML-файл, возвращает множество валидных токенов"""
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            html_content = f.read()
-    except Exception as e:
-        print(f"  Ошибка чтения {filepath}: {e}")
-        return set()
+        if not valid_tokens:
+            # Пустые файлы всё равно создаём
+            self._save_tokens_file(doc_id, set())
+            self._save_lemmas_file(doc_id, {})
+            return
 
-    text = extract_text_from_html(html_content)
+        # token -> lemma
+        token_to_lemma = {}
+        # lemma -> set(tokens) для этого документа
+        doc_lemma_groups = defaultdict(set)
 
-    # Разбиваем на слова — берём только последовательности кириллических букв
-    raw_tokens = re.findall(r'[а-яёА-ЯЁ]+', text)
+        unique_list = sorted(valid_tokens)
+        batch_size = 500
 
-    valid_tokens = set()
-    for token in raw_tokens:
-        token_lower = token.lower()
-        if is_valid_token(token_lower):
-            valid_tokens.add(token_lower)
+        for start in range(0, len(unique_list), batch_size):
+            batch = unique_list[start:start + batch_size]
+            batch_text = '\n'.join(batch)
+            analysis = self._safe_analyze(batch_text)
 
-    return valid_tokens
+            for item in analysis:
+                word = item.get('text', '').strip().lower()
+                if not word or not re.match(r'^[а-яё]+$', word):
+                    continue
 
+                a = item.get('analysis', [])
+                if a:
+                    lemma = a[0].get('lex', word).lower()
+                else:
+                    lemma = word
 
-def collect_all_tokens(pages_dir: str) -> set:
-    """Собирает все уникальные токены из всех файлов в директории"""
-    all_tokens = set()
+                if not re.match(r'^[а-яё]+$', lemma):
+                    lemma = word
 
-    html_files = sorted([
-        f for f in os.listdir(pages_dir)
-        if f.endswith('.html')
-    ])
+                if lemma in STOP_WORDS or len(lemma) < MIN_TOKEN_LENGTH:
+                    continue
 
-    print(f"Найдено {len(html_files)} HTML-файлов в '{pages_dir}'")
+                if word in valid_tokens:
+                    token_to_lemma[word] = lemma
+                    doc_lemma_groups[lemma].add(word)
 
-    for i, filename in enumerate(html_files):
-        filepath = os.path.join(pages_dir, filename)
-        tokens = tokenize_file(filepath)
-        all_tokens.update(tokens)
+        # Оставляем только токены, для которых нашлась лемма
+        final_tokens = set(token_to_lemma.keys())
 
-        if (i + 1) % 10 == 0 or i == len(html_files) - 1:
-            print(f"  Обработано {i + 1}/{len(html_files)} файлов, "
-                  f"уникальных токенов: {len(all_tokens)}")
+        self._save_tokens_file(doc_id, final_tokens)
+        self._save_lemmas_file(doc_id, doc_lemma_groups)
 
-    return all_tokens
+        # Обновляем глобальные данные
+        self.all_tokens.update(final_tokens)
+        for lemma, tokens in doc_lemma_groups.items():
+            self.all_lemma_groups[lemma].update(tokens)
 
+    def _save_tokens_file(self, doc_id: int, tokens: set):
+        """
+        Сохраняет файл токенов для одного документа.
+        Формат: <токен>\n
+        """
+        filename = f"tokens_{doc_id:04d}.txt"
+        filepath = os.path.join(self.output_tokens_dir, filename)
 
-def save_tokens(tokens: set, output_path: str):
-    """Сохраняет список токенов в файл"""
-    sorted_tokens = sorted(tokens)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            for token in sorted(tokens):
+                f.write(token + '\n')
 
-    with open(output_path, 'w', encoding='utf-8') as f:
-        for token in sorted_tokens:
-            f.write(token + '\n')
+    def _save_lemmas_file(self, doc_id: int, lemma_groups: dict):
+        """
+        Сохраняет файл лемм для одного документа.
+        Формат: <лемма> <токен1> <токен2> ... <токенN>\n
+        """
+        filename = f"lemmas_{doc_id:04d}.txt"
+        filepath = os.path.join(self.output_lemmas_dir, filename)
 
-    print(f"Сохранено {len(sorted_tokens)} токенов в '{output_path}'")
+        with open(filepath, 'w', encoding='utf-8') as f:
+            for lemma in sorted(lemma_groups.keys()):
+                tokens_sorted = sorted(lemma_groups[lemma])
+                line = lemma + ' ' + ' '.join(tokens_sorted)
+                f.write(line + '\n')
 
+    def _save_global_files(self):
+        """Сохраняет общие файлы tokens.txt и lemmas.txt"""
+        # Общий файл токенов
+        tokens_path = 'tokens.txt'
+        with open(tokens_path, 'w', encoding='utf-8') as f:
+            for token in sorted(self.all_tokens):
+                f.write(token + '\n')
+        print(f"  Общий файл токенов: {tokens_path} ({len(self.all_tokens)} токенов)")
 
-def lemmatize_tokens(tokens: set) -> dict:
-    """
-    Группирует токены по леммам с помощью pymystem3.
-    Возвращает dict: лемма -> set(токенов)
-    """
-    mystem = Mystem()
+        # Общий файл лемм
+        lemmas_path = 'lemmas.txt'
+        with open(lemmas_path, 'w', encoding='utf-8') as f:
+            for lemma in sorted(self.all_lemma_groups.keys()):
+                tokens_sorted = sorted(self.all_lemma_groups[lemma])
+                line = lemma + ' ' + ' '.join(tokens_sorted)
+                f.write(line + '\n')
+        print(f"  Общий файл лемм:   {lemmas_path} ({len(self.all_lemma_groups)} лемм)")
 
-    lemma_groups = defaultdict(set)
-    token_list = sorted(tokens)
+    def run(self):
+        """Основной pipeline"""
+        # Находим HTML-файлы
+        html_files = sorted([
+            f for f in os.listdir(self.pages_dir)
+            if f.endswith('.html')
+        ])
 
-    print(f"\nЛемматизация {len(token_list)} токенов...")
+        total = len(html_files)
+        if total == 0:
+            print(f"Нет HTML-файлов в '{self.pages_dir}'!")
+            return
 
-    # Обрабатываем батчами для скорости
-    batch_size = 500
-    for start in range(0, len(token_list), batch_size):
-        batch = token_list[start:start + batch_size]
-        # pymystem3 принимает текст, разделённый пробелами/переносами
-        text = '\n'.join(batch)
+        print(f"Найдено {total} HTML-файлов")
+        print("=" * 60)
 
-        analysis = mystem.analyze(text)
+        print("\nТокенизация и лемматизация документов...")
 
-        for item in analysis:
-            original = item.get('text', '').strip().lower()
-            if not original or not re.match(r'^[а-яёА-ЯЁ]+$', original):
-                continue
+        for i, filename in enumerate(html_files):
+            match = re.search(r'page_(\d+)', filename)
+            doc_id = int(match.group(1)) if match else i
 
-            analysis_list = item.get('analysis', [])
-            if analysis_list:
-                lemma = analysis_list[0].get('lex', original).lower()
-            else:
-                lemma = original
+            filepath = os.path.join(self.pages_dir, filename)
+            self._process_document(doc_id, filepath)
 
-            # Проверяем что лемма тоже валидная
-            if not re.match(r'^[а-яё]+$', lemma):
-                lemma = original
+            # Прогресс-бар
+            done = i + 1
+            pct = done * 100 // total
+            bar = '█' * (pct // 5) + '░' * (20 - pct // 5)
+            print(f"\r  [{bar}] {done}/{total} ({pct}%)", end='', flush=True)
 
-            # Пропускаем если лемма — стоп-слово
-            if lemma in STOP_WORDS:
-                continue
+        print()
 
-            if original in tokens:
-                lemma_groups[lemma].add(original)
+        print("\nСохранение общих файлов...")
+        self._save_global_files()
 
-        processed = min(start + batch_size, len(token_list))
-        if processed % 1000 == 0 or processed == len(token_list):
-            print(f"  Лемматизировано {processed}/{len(token_list)}, "
-                  f"уникальных лемм: {len(lemma_groups)}")
+        print("\n" + "=" * 60)
+        print("ГОТОВО!")
+        print(f"  Документов обработано:  {total}")
+        print(f"  Уникальных токенов:     {len(self.all_tokens)}")
+        print(f"  Уникальных лемм:        {len(self.all_lemma_groups)}")
+        print()
+        print(f"  Файлы токенов (по док.): {self.output_tokens_dir}/")
+        print(f"  Файлы лемм (по док.):    {self.output_lemmas_dir}/")
+        print(f"  Общий tokens.txt")
+        print(f"  Общий lemmas.txt")
 
-    return dict(lemma_groups)
+        # Примеры
+        self._print_examples()
 
+    def _print_examples(self):
+        """Выводит примеры содержимого файлов"""
+        # Пример файла токенов
+        token_files = sorted(os.listdir(self.output_tokens_dir))
+        if token_files:
+            sample_path = os.path.join(self.output_tokens_dir, token_files[0])
+            print(f"\n  Пример {token_files[0]}:")
+            with open(sample_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            for line in lines[:5]:
+                print(f"    {line.strip()}")
+            if len(lines) > 5:
+                print(f"    ... (ещё {len(lines) - 5} токенов)")
 
-def save_lemmas(lemma_groups: dict, output_path: str):
-    """Сохраняет леммы с токенами в файл"""
-    with open(output_path, 'w', encoding='utf-8') as f:
-        for lemma in sorted(lemma_groups.keys()):
-            tokens_sorted = sorted(lemma_groups[lemma])
-            line = lemma + ' ' + ' '.join(tokens_sorted)
-            f.write(line + '\n')
-
-    total_tokens = sum(len(v) for v in lemma_groups.values())
-    print(f"Сохранено {len(lemma_groups)} лемм ({total_tokens} токенов) в '{output_path}'")
+        # Пример файла лемм
+        lemma_files = sorted(os.listdir(self.output_lemmas_dir))
+        if lemma_files:
+            sample_path = os.path.join(self.output_lemmas_dir, lemma_files[0])
+            print(f"\n  Пример {lemma_files[0]}:")
+            with open(sample_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            for line in lines[:5]:
+                print(f"    {line.strip()}")
+            if len(lines) > 5:
+                print(f"    ... (ещё {len(lines) - 5} лемм)")
 
 
 def main():
-    pages_dir = 'pages'
-    tokens_output = 'tokens.txt'
-    lemmas_output = 'lemmas.txt'
-
-    if not os.path.exists(pages_dir):
-        print(f"Директория '{pages_dir}' не найдена!")
-        print("Сначала запустите краулер для скачивания страниц.")
-        return
-
-    # 1. Токенизация
-    print("=" * 60)
-    print("ЭТАП 1: ТОКЕНИЗАЦИЯ")
-    print("=" * 60)
-
-    all_tokens = collect_all_tokens(pages_dir)
-
-    if not all_tokens:
-        print("Токены не найдены!")
-        return
-
-    save_tokens(all_tokens, tokens_output)
-
-    # Статистика
-    print(f"\nСтатистика токенизации:")
-    print(f"  Уникальных токенов: {len(all_tokens)}")
-    lengths = [len(t) for t in all_tokens]
-    print(f"  Мин. длина токена: {min(lengths)}")
-    print(f"  Макс. длина токена: {max(lengths)}")
-    print(f"  Средняя длина: {sum(lengths) / len(lengths):.1f}")
-
-    # 2. Лемматизация
-    print("\n" + "=" * 60)
-    print("ЭТАП 2: ЛЕММАТИЗАЦИЯ")
-    print("=" * 60)
-
-    lemma_groups = lemmatize_tokens(all_tokens)
-    save_lemmas(lemma_groups, lemmas_output)
-
-    # Статистика
-    print(f"\nСтатистика лемматизации:")
-    print(f"  Уникальных лемм: {len(lemma_groups)}")
-    multi_form = {k: v for k, v in lemma_groups.items() if len(v) > 1}
-    print(f"  Лемм с несколькими формами: {len(multi_form)}")
-
-    if multi_form:
-        print(f"\n  Примеры (до 10):")
-        for lemma in list(sorted(multi_form.keys()))[:10]:
-            forms = sorted(multi_form[lemma])
-            print(f"    {lemma}: {', '.join(forms)}")
-
-    print("\n" + "=" * 60)
-    print("ГОТОВО!")
-    print(f"  Токены: {tokens_output}")
-    print(f"  Леммы:  {lemmas_output}")
-    print("=" * 60)
+    tokenizer = Tokenizer(
+        pages_dir='pages',
+        output_tokens_dir='tokens',
+        output_lemmas_dir='lemmas',
+    )
+    tokenizer.run()
 
 
 if __name__ == "__main__":
